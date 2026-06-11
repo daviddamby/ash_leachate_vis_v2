@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Volcanic Ash Leachate Visualiser</title>
+  <meta name="description" content="Generate publication-quality plots of volcanic ash leachate chemistry, with optional normalisation to a global database (Ayris &amp; Delmelle, 2012)." />
+  <link rel="stylesheet" href="css/styles.css" />
+  <!-- Third-party libraries (CDN, no build step) -->
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js" defer></script>
+  <script src="https://cdn.plot.ly/plotly-2.32.0.min.js" charset="utf-8" defer></script>
+  <!-- Application modules -->
+  <script src="js/data.js" defer></script>
+  <script src="js/parse.js" defer></script>
+  <script src="js/normalize.js" defer></script>
+  <script src="js/plot.js" defer></script>
+  <script src="js/methods.js" defer></script>
+  <script src="js/app.js" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32" width="28" height="28" role="img" aria-label="logo">
+            <path d="M16 3 L29 27 H3 Z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/>
+            <circle cx="16" cy="20" r="2.4" fill="currentColor"/>
+            <circle cx="11" cy="24" r="1.6" fill="currentColor"/>
+            <circle cx="21" cy="24" r="1.6" fill="currentColor"/>
+          </svg>
+        </span>
+        <div class="brand-text">
+          <h1>Ash Leachate Visualiser</h1>
+          <p class="tagline">Plot volcanic ash leachate chemistry — absolute or globally normalised</p>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap layout">
+    <!-- ============ CONTROLS COLUMN ============ -->
+    <section class="controls" aria-label="Data and options">
+
+      <!-- DATA INPUT -->
+      <article class="card">
+        <header class="card-head">
+          <h2><span class="step">1</span> Your data</h2>
+        </header>
+
+        <div class="tabs" role="tablist" aria-label="Data input method">
+          <button class="tab is-active" role="tab" id="tab-upload" aria-controls="panel-upload" aria-selected="true">Upload file</button>
+          <button class="tab" role="tab" id="tab-paste" aria-controls="panel-paste" aria-selected="false">Paste</button>
+        </div>
+
+        <div class="tab-panel" id="panel-upload" role="tabpanel" aria-labelledby="tab-upload">
+          <label class="dropzone" id="dropzone">
+            <input type="file" id="file-input" accept=".csv,text/csv" hidden />
+            <span class="dz-icon" aria-hidden="true">⬆</span>
+            <span class="dz-title">Drop a CSV here or click to browse</span>
+            <span class="dz-sub">One row per sample · one column per element</span>
+          </label>
+        </div>
+
+        <div class="tab-panel is-hidden" id="panel-paste" role="tabpanel" aria-labelledby="tab-paste">
+          <textarea id="paste-area" class="paste-area" spellcheck="false"
+            placeholder="sample_id, Cl, F, SO4, Na, Ca, ...&#10;ASH-001, 12.4, 3.1, 88, 5.2, 19, ..."></textarea>
+          <button class="btn btn-ghost btn-sm" id="btn-parse-paste">Use pasted data</button>
+        </div>
+
+        <div class="data-actions">
+          <button class="btn btn-ghost btn-sm" id="btn-example">Load example data</button>
+          <a class="btn btn-ghost btn-sm" id="btn-template" href="data/template.csv" download>Download CSV template</a>
+        </div>
+
+        <div class="status" id="data-status" role="status" aria-live="polite"></div>
+
+        <div class="preview is-hidden" id="preview">
+          <div class="preview-head">
+            <span id="preview-summary"></span>
+          </div>
+          <div class="preview-scroll"><table id="preview-table"></table></div>
+        </div>
+      </article>
+
+      <!-- OPTIONS -->
+      <article class="card">
+        <header class="card-head">
+          <h2><span class="step">2</span> Options</h2>
+        </header>
+
+        <fieldset class="opt">
+          <legend>Values</legend>
+          <div class="segmented" role="radiogroup" aria-label="Value type">
+            <label><input type="radio" name="valuetype" value="absolute" checked /> <span>Absolute</span></label>
+            <label><input type="radio" name="valuetype" value="normalized" /> <span>Normalised</span></label>
+          </div>
+          <p class="opt-hint" id="hint-norm">Normalised = your value ÷ the global reference (Ayris &amp; Delmelle, 2012).</p>
+        </fieldset>
+
+        <fieldset class="opt">
+          <legend>Elements shown</legend>
+          <div class="segmented" role="radiogroup" aria-label="Elements shown">
+            <label><input type="radio" name="elements" value="data" checked /> <span>Only my elements</span></label>
+            <label><input type="radio" name="elements" value="all" /> <span>All elements</span></label>
+          </div>
+        </fieldset>
+
+        <fieldset class="opt">
+          <legend>Concentration units</legend>
+          <select id="sel-units" class="select"></select>
+        </fieldset>
+
+        <fieldset class="opt">
+          <legend>Ash : water ratio</legend>
+          <select id="sel-ratio" class="select"></select>
+          <p class="opt-hint">The solid:solution ratio used in your leaching experiment.</p>
+        </fieldset>
+
+        <fieldset class="opt">
+          <legend>Magmatic composition</legend>
+          <select id="sel-composition" class="select"></select>
+          <p class="opt-hint">Bulk composition of your samples (TAS classification).</p>
+        </fieldset>
+
+        <fieldset class="opt">
+          <legend>Y-axis scale</legend>
+          <div class="segmented" role="radiogroup" aria-label="Y axis scale">
+            <label><input type="radio" name="yscale" value="log" checked /> <span>Log</span></label>
+            <label><input type="radio" name="yscale" value="linear" /> <span>Linear</span></label>
+          </div>
+        </fieldset>
+
+        <button class="btn btn-primary btn-block" id="btn-create" disabled>Create plot</button>
+      </article>
+    </section>
+
+    <!-- ============ OUTPUT COLUMN ============ -->
+    <section class="output" aria-label="Plot and methods">
+      <article class="card">
+        <header class="card-head card-head-row">
+          <h2><span class="step">3</span> Plot</h2>
+          <div class="download-group is-hidden" id="downloads">
+            <button class="btn btn-ghost btn-sm" id="btn-png">PNG</button>
+            <button class="btn btn-ghost btn-sm" id="btn-svg">SVG</button>
+            <button class="btn btn-ghost btn-sm" id="btn-csv">Processed CSV</button>
+          </div>
+        </header>
+        <div class="plot-shell">
+          <div id="plot" class="plot"></div>
+          <div class="plot-empty" id="plot-empty">
+            <p>Load data and press <strong>Create plot</strong>.</p>
+          </div>
+        </div>
+      </article>
+
+      <article class="card">
+        <header class="card-head card-head-row">
+          <h2>Methods text</h2>
+          <button class="btn btn-ghost btn-sm" id="btn-copy-methods">Copy</button>
+        </header>
+        <p class="methods" id="methods-text">Your auto-generated methods paragraph will appear here once you create a plot.</p>
+      </article>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <p>
+        Normalisation reference: <span id="ref-citation"></span>
+        <span class="ref-status" id="ref-status"></span>
+      </p>
+      <p class="muted">Runs entirely in your browser — your data is never uploaded to a server.</p>
+    </div>
+  </footer>
+</body>
+</html>
